@@ -1,0 +1,12 @@
+name = "akamai"
+type = "webpack"
+
+account_id = "ca7271d81a89aa1b584684f4aea8c1a4"
+workers_dev = true
+compatibility_date = "2021-11-15"
+
+[vars]
+ORIGIN = "https://demo-typescript-react.atko.rocks"
+
+[env.production]
+route = "https://demo-typescript-react.atko.rocks/oauth2/aus2glk7nm0L9ndXG1d7"

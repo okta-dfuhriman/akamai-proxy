@@ -1,4 +1,5 @@
 import { auth, hset, expire } from '@upstash/redis';
+import { checkIfFuntionParamPresent } from 'serverless-cloudflare-workers/shared/validate';
 
 auth(UPSTASH_ENDPOINT, UPSTASH_TOKEN);
 
@@ -6,7 +7,9 @@ const setHash = async (state, akamaiHeader) => {
     try {
         const { data, error } = await hset(state, 'data', akamaiHeader);
 
-        if (!error) {
+        if (error) {
+            console.log(error);
+        } else {
             await expire(state, UPSTASH_EXPIRE);
         }
 
@@ -34,7 +37,7 @@ const setCommonHeaders = async (resp, origin) => {
             'Access-Control-Allow-Headers',
             'Set-Cookie, Content-Type'
         );
-        resp.headers.set('Access-Control-Allow-Origin', origin);
+        resp.headers.set('Access-Control-Allow-Origin', origin || ORIGIN);
         resp.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS, POST');
         /*
            CORS requires a max age in order to set credentials.
@@ -52,7 +55,7 @@ const setCommonHeaders = async (resp, origin) => {
 
 const handler = async (req, res) => {
     try {
-        const { headers, url } = req || {};
+        const { headers, url, method } = req || {};
         const { origin, host } = Object.fromEntries(headers) || {};
 
         const regex = /(?=\.).*/;
@@ -74,11 +77,7 @@ const handler = async (req, res) => {
         });
 
         // Cache the Akamai header
-        const { error } = await setHash(state, akamaiHeader);
-
-        if (error) {
-            throw error;
-        }
+        await setHash(state, akamaiHeader);
 
         // Forward to Okta
         const response = await fetch(modifiedRequest, {
@@ -87,14 +86,16 @@ const handler = async (req, res) => {
 
         const modifiedResponse = new Response(await response.text(), response);
 
-        modifiedResponse.headers.append(
-            'Set-Cookie',
-            `aur=${Buffer.from(akamaiHeader).toString(
-                'base64'
-            )}; Secure; HttpOnly; Path=/; Domain=${domain}; SameSite=None`
-        );
+        if (method && method !== 'OPTIONS') {
+            modifiedResponse.headers.append(
+                'Set-Cookie',
+                `aur=${Buffer.from(akamaiHeader).toString(
+                    'base64'
+                )}; Secure; HttpOnly; Path=/; Domain=${domain}; SameSite=None`
+            );
 
-        modifiedResponse.headers.append('Akamai-User-Risk', akamaiHeader);
+            modifiedResponse.headers.append('Akamai-User-Risk', akamaiHeader);
+        }
 
         await setCommonHeaders(modifiedResponse, origin);
 

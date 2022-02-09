@@ -6,7 +6,14 @@ workers_dev = true
 compatibility_date = "2021-11-15"
 
 [vars]
-ORIGIN = "https://demo-typescript-react.atko.rocks"
+# This is your custom domain configured in Okta.
+ORIGIN = "https://subway.atko.rocks"
+# Get this value from your Upstash account.
+UPSTASH_ENDPOINT = "https://eu1-artistic-bass-33019.upstash.io"
+# Change this if you want to modify the TTL for stashed data.
+UPSTASH_EXPIRE = 300
+# Makes testing easier since the header is 'hardcoded'.
+SCORE = 50
 
-[env.production]
-route = "https://demo-typescript-react.atko.rocks/oauth2/aus2glk7nm0L9ndXG1d7"
+# [secrets]
+# UPSTASH_TOKEN

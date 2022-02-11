@@ -14,9 +14,13 @@ UPSTASH_ENDPOINT = "https://eu1-artistic-bass-33019.upstash.io"
 UPSTASH_EXPIRE = 300
 # Makes testing easier since the header is 'hardcoded'.
 SCORE = 50
+# Okta ClientId for Risk provider
+RISK_CLIENT_ID = '0oa2jhz26paExwh7n1d7'
 # Dummy header for testing purposes
 AKAMAI_HEADER = 'uuid=964d54b7-0821-413a-a4d6-8131770ec8d5;requestid=135a5cdc;status=0;score=50;risk=unp:432/H|ugp:ie/M;trust=utp:weekday_1|udfp:be44fff67b66ec7b;general=aci:T;allow=0;action=none'
 
 # [secrets]
 # UPSTASH_TOKEN
 # SENTRY_DSN
+# PUBLIC_KEY
+# PUBLIC_PRIVATE_KEY_PAIR

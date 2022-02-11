@@ -1,5 +1,6 @@
 import { auth, hset, expire } from '@upstash/redis';
 import * as Sentry from '@sentry/browser';
+import * as jose from 'jose';
 
 Sentry.init({
     dsn: SENTRY_DSN,
@@ -81,9 +82,82 @@ const parseHeader = async (_data) => {
     }
 };
 
+const generateJWT = async () => {
+    try {
+        const keyPair = JSON.parse(
+            new Buffer.from(PUBLIC_PRIVATE_KEY_PAIR, 'base64').toString('utf8')
+        );
+
+        const jwk = await jose.importJWK(keyPair);
+
+        const header = { alg: 'RS256', typ: 'JWT', kid: keyPair.kid };
+
+        const now = Math.floor(new Date().getTime() / 1000);
+
+        return await new jose.SignJWT({})
+            .setProtectedHeader(header)
+            .setAudience(`${ORIGIN}/oauth2/v1/token`)
+            .setIssuer(RISK_CLIENT_ID)
+            .setSubject(RISK_CLIENT_ID)
+            .setIssuedAt(now)
+            .setExpirationTime('5m')
+            .sign(jwk);
+    } catch (error) {
+        Sentry.captureException(error);
+        throw error;
+    }
+};
+
+const buildTokenRequest = async () => {
+    try {
+        const jwt = await generateJWT();
+
+        const urlencoded = new URLSearchParams();
+
+        urlencoded.append('grant_type', 'client_credentials');
+        urlencoded.append('scope', 'okta.riskEvents.manage');
+        urlencoded.append(
+            'client_assertion_type',
+            'urn:ietf:params:oauth:client-assertion-type:jwt-bearer'
+        );
+        urlencoded.append('client_assertion', jwt);
+
+        return {
+            method: 'POST',
+            body: urlencoded,
+        };
+    } catch (error) {
+        Sentry.captureException(error);
+        throw error;
+    }
+};
+
+const getAccessToken = async () => {
+    try {
+        const url = `${ORIGIN}/oauth2/v1/token`;
+
+        const options = await buildTokenRequest();
+
+        const resp = await fetch(url, options);
+
+        if (!resp.ok) {
+            const err = new Error(`Fetch error! Status: ${resp.status}`);
+            console.error(err);
+            return Sentry.captureException(err);
+        }
+
+        return await resp.json();
+    } catch (error) {
+        Sentry.captureException(error);
+        throw error;
+    }
+};
+
 const handleRiskEvent = async ({ ipAddress, akamaiHeader }) => {
     try {
         const url = `${ORIGIN}/api/v1/risk/events/ip`;
+
+        const { access_token } = await getAccessToken();
 
         if (ipAddress) {
             const { score } = (await parseHeader(akamaiHeader)) || 0;
@@ -97,25 +171,36 @@ const handleRiskEvent = async ({ ipAddress, akamaiHeader }) => {
                 riskLevel = 'LOW';
             }
 
-            const body = {
-                timestamp: new Date(),
-                subjects: [
-                    {
-                        ip: ipAddress,
-                        riskLevel: riskLevel,
-                    },
-                ],
+            const body = [
+                {
+                    timestamp: new Date(),
+                    subjects: [
+                        {
+                            ip: ipAddress,
+                            riskLevel: riskLevel,
+                        },
+                    ],
+                },
+            ];
+
+            const options = {
+                method: 'POST',
+                body: JSON.stringify(body),
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${access_token}`,
+                },
             };
 
-            fetch(url, { method: 'POST', body: JSON.stringify(body) })
-                .then((resp) => {
-                    if (!resp.ok()) {
-                        Sentry.captureEvent(resp);
-                    }
-                })
-                .catch((error) => {
-                    Sentry.captureException(error);
-                });
+            const resp = await fetch(url, options);
+
+            if (resp && resp.status === 202) {
+                Sentry.captureMessage('Risk event handled successfully');
+            } else {
+                Sentry.captureException(
+                    new Error(`risk event failed [${resp.status}]`)
+                );
+            }
         }
     } catch (error) {
         Sentry.captureException(error);
@@ -127,12 +212,16 @@ const handler = async (req, res) => {
     try {
         const { headers, url, method } = req || {};
         const { origin, host } = Object.fromEntries(headers) || {};
-
-        const ipAddress = headers.get('cf-connecting-ip');
+        const { pathname } = new URL(req.url) || {};
         const akamaiHeader = headers.get('akamai-user-risk') || AKAMAI_HEADER;
 
-        handleRiskEvent({ ipAddress, akamaiHeader });
+        const tokenRegex = /token/gm;
 
+        if (tokenRegex.test(pathname)) {
+            const ipAddress = headers.get('cf-connecting-ip');
+
+            await handleRiskEvent({ ipAddress, akamaiHeader });
+        }
         const regex = /(?=\.).*/;
         const _origin = origin || 'https://' + host || ORIGIN;
         const domain = _origin.match(regex)[0] || '';
@@ -142,8 +231,6 @@ const handler = async (req, res) => {
         const state = params.get('state');
 
         let newHeaders = new Headers(headers);
-
-        // const akamaiHeader = `uuid=964d54b7-0821-413a-a4d6-8131770ec8d5;requestid=135a5cdc;status=0;score=${SCORE};risk=unp:432/H|ugp:ie/M;trust=utp:weekday_1|udfp:be44fff67b66ec7b;general=aci:T;allow=0;action=none`;
 
         newHeaders.append('Akamai-User-Risk', akamaiHeader);
 

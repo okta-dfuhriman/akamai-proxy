@@ -1,21 +1,26 @@
 {
-  "name": "akamai-proxy",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "author": "Danny Fuhriman",
-  "license": "MIT",
-  "devDependencies": {
-    "prettier": "^2.5.1",
-    "webpack": "^5.68.0",
-    "webpack-cli": "^4.9.2"
-  },
-  "dependencies": {
-    "@upstash/redis": "^0.2.1",
-    "itty-router": "^2.4.10",
-    "serverless-cloudflare-workers": "^1.2.0"
-  }
+    "name": "akamai-proxy",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.js",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/okta-dfuhriman/akamai-proxy.git"
+    },
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "author": "Danny Fuhriman",
+    "license": "MIT",
+    "devDependencies": {
+        "prettier": "^2.5.1",
+        "webpack": "^5.68.0",
+        "webpack-cli": "^4.9.2"
+    },
+    "dependencies": {
+        "@sentry/browser": "^6.17.6",
+        "@upstash/redis": "^0.2.1",
+        "itty-router": "^2.4.10",
+        "serverless-cloudflare-workers": "^1.2.0"
+    }
 }
